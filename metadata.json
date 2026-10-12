@@ -1,0 +1,8 @@
+{
+  "name": "HPLC AMV Report Generator",
+  "description": "Professional HPLC Analytical Method Validation (AMV) report generator with AI auto-extraction, chromatographic calculations (Area, Height, Tailing, Theoretical Plates, Area%, Resolution, RRT, RT), and PDF download.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

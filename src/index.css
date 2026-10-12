@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+/* Authentic Scanned Document Texture effect */
+.scanned-paper {
+  background: #f5f2ea !important;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.22) !important;
+  filter: contrast(1.08) brightness(0.98) grayscale(0.12);
+  position: relative;
+}
+
+.scanned-paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    radial-gradient(ellipse at 15% 8%, rgba(0, 0, 0, 0.05), transparent 40%),
+    radial-gradient(ellipse at 88% 92%, rgba(0, 0, 0, 0.06), transparent 42%),
+    repeating-linear-gradient(0.4deg, rgba(0, 0, 0, 0.012) 0px, rgba(0, 0, 0, 0.012) 1px, transparent 1px, transparent 3px);
+  mix-blend-mode: multiply;
+}
+
+.scanned-paper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: inset 0 0 42px rgba(0, 0, 0, 0.1), inset 0 0 8px rgba(0, 0, 0, 0.06);
+}
+
+/* LabSolutions Report Styling */
+.ls-table th,
+.ls-table td {
+  border: 0.5px solid #000000;
+  padding: 1px 3px;
+  line-height: 1.25;
+}
+
+/* Print Optimization */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .report-page {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 auto !important;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 8mm 10mm !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+  }
+  .report-page:last-child {
+    page-break-after: auto !important;
+  }
+  @page {
+    size: A4 portrait;
+    margin: 6mm;
+  }
+}

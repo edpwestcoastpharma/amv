@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<body>
+<svg id="mysvg" width="200" height="100" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="100" fill="#ffffff" />
+  <circle cx="50" cy="50" r="40" stroke="green" stroke-width="4" fill="yellow" />
+</svg>
+<script>
+  async function svgToPng(svgElement) {
+    return new Promise((resolve, reject) => {
+      try {
+        const svgString = new XMLSerializer().serializeToString(svgElement);
+        // Important: ensure xmlns is present, though serializeToString usually includes it if it's in the DOM properly.
+        const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(svgBlob);
+        
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          // Scale for retina/high quality
+          const scale = 2;
+          canvas.width = svgElement.clientWidth * scale;
+          canvas.height = svgElement.clientHeight * scale;
+          const ctx = canvas.getContext("2d");
+          ctx.scale(scale, scale);
+          
+          // Draw white background if needed
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          
+          ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(url);
+          resolve(canvas.toDataURL("image/png"));
+        };
+        img.onerror = (e) => {
+          URL.revokeObjectURL(url);
+          reject(e);
+        };
+        img.src = url;
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  svgToPng(document.getElementById('mysvg')).then(dataUrl => {
+    console.log("DATA URL:", dataUrl.substring(0, 50));
+    const res = document.createElement('img');
+    res.src = dataUrl;
+    document.body.appendChild(res);
+  });
+</script>
+</body>
+</html>
