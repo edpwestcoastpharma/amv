@@ -683,18 +683,21 @@ export function getFixedTrace(inj: InjectionData, maxX: number = 30): [number, n
   const sigma = wHalfMin / 2.35482;
 
   const points: [number, number][] = [];
-  const dt = 0.05;
-
   const deg = inj.degradantInfo;
 
-  for (let t = 0; t <= safeMaxX; t += dt) {
+  // Adaptive sampling: high-density (0.005 min) in peak region for ultra-smooth bell curve
+  let t = 0;
+  while (t <= safeMaxX) {
+    const inPeakRegion = Math.abs(t - safeRt) <= 2.0 || (deg && deg.degradantRt && Math.abs(t - deg.degradantRt) <= 1.5);
+    const dt = inPeakRegion ? 0.005 : 0.04;
+
     let y = 0;
 
-    // Main analyte peak
+    // Main analyte peak with tailing factor
     const dtPeak = t - safeRt;
     const effectiveSigma = dtPeak > 0 ? sigma * safeTailing : sigma;
     const mainPeak = safeHeight * Math.exp(-0.5 * Math.pow(dtPeak / effectiveSigma, 2));
-    if (mainPeak > 0.1) y += mainPeak;
+    if (mainPeak > 0.05) y += mainPeak;
 
     // Degradant peak if present in data
     if (deg && deg.degradantRt && deg.degradantHeight > 0) {
@@ -703,14 +706,24 @@ export function getFixedTrace(inj: InjectionData, maxX: number = 30): [number, n
       const dtDeg = t - deg.degradantRt;
       const effectiveDegSigma = dtDeg > 0 ? degSigma * (deg.degradantTailing || 1.08) : degSigma;
       const degPeak = deg.degradantHeight * Math.exp(-0.5 * Math.pow(dtDeg / effectiveDegSigma, 2));
-      if (degPeak > 0.1) y += degPeak;
+      if (degPeak > 0.05) y += degPeak;
     }
 
-    // Realistic baseline micro-noise (0.04% of peak height)
-    const noiseAmp = Math.min(25, Math.max(2, safeHeight * 0.0003));
+    // Realistic baseline micro-noise (0.02% of peak height)
+    const noiseAmp = Math.min(15, Math.max(1, safeHeight * 0.00015));
     const noise = Math.sin(t * 9.2) * (noiseAmp * 0.4) + Math.cos(t * 23.5) * (noiseAmp * 0.35) + Math.sin(t * 51.1) * (noiseAmp * 0.25);
 
-    points.push([parseFloat(t.toFixed(2)), parseFloat((y + noise).toFixed(2))]);
+    points.push([parseFloat(t.toFixed(3)), parseFloat((y + noise).toFixed(2))]);
+    t += dt;
+  }
+
+  // Ensure exact apex is present
+  const apexIdx = points.findIndex(p => Math.abs(p[0] - safeRt) < 0.003);
+  if (apexIdx >= 0) {
+    points[apexIdx] = [safeRt, safeHeight];
+  } else {
+    points.push([safeRt, safeHeight]);
+    points.sort((a, b) => a[0] - b[0]);
   }
 
   return points;

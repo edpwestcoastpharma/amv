@@ -21,7 +21,7 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
   height = 180,
   small = false,
   runTimeMin = 30,
-  boxBorder = false,
+  boxBorder = true,
 }) => {
   const hasArea =
     injection.area !== null &&
@@ -60,7 +60,7 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
   const pts = getFixedTrace(injection, x1);
 
   const m = {
-    l: 45, // wider left margin for large numbers
+    l: 52, // margin for large numbers including negative e.g. -50,000
     r: 14,
     t: small ? 14 : 16,
     b: 24,
@@ -68,27 +68,47 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
   const pw = Math.max(10, width - m.l - m.r);
   const ph = Math.max(10, height - m.t - m.b);
 
-  // Dynamically scale Y axis based on actual peak height in uV
+  // Rule E1: y_max = nice_ceil(max_height_in_that_section * 1.25)
+  // Gridlines / ticks at: -y_max/4, 0, y_max/4, y_max/2, 3y_max/4, y_max
   const maxPt = pts.reduce((max, p) => (p[1] > max[1] ? p : max), [safeRt, 0.1]);
   let peakVal = !isNaN(maxPt[1]) && maxPt[1] > 0 ? maxPt[1] : 100;
 
-  // Round up to a nice tick number
-  const exponent = Math.floor(Math.log10(peakVal));
-  const fraction = peakVal / Math.pow(10, exponent);
-  let niceFraction = 10;
-  if (fraction <= 2) niceFraction = 2;
-  else if (fraction <= 2.5) niceFraction = 2.5;
-  else if (fraction <= 4) niceFraction = 4;
-  else if (fraction <= 5) niceFraction = 5;
-  else if (fraction <= 8) niceFraction = 8;
-  const niceMax = Math.max(10, niceFraction * Math.pow(10, exponent));
+  let y1: number;
+  let y0: number;
+  let yt: number[];
 
-  // When isZeroArea (No peak / blank / placebo), provide clean 0 to 100 uV scale with no line inside
-  const y1 = isZeroArea ? 100 : niceMax;
-  const y0 = isZeroArea ? 0 : -0.25 * niceMax;
-  const yt = isZeroArea
-    ? [0, 20, 40, 60, 80, 100]
-    : [y0, 0, niceMax * 0.25, niceMax * 0.5, niceMax * 0.75, niceMax];
+  if (isZeroArea) {
+    y1 = 100;
+    y0 = 0;
+    yt = [0, 20, 40, 60, 80, 100];
+  } else {
+    const rawMax = peakVal * 1.25;
+    const exponent = Math.floor(Math.log10(Math.max(1, rawMax)));
+    const fraction = rawMax / Math.pow(10, exponent);
+    let niceFraction = 10;
+    if (fraction <= 1.0) niceFraction = 1.0;
+    else if (fraction <= 1.2) niceFraction = 1.2;
+    else if (fraction <= 1.5) niceFraction = 1.5;
+    else if (fraction <= 2.0) niceFraction = 2.0;
+    else if (fraction <= 2.5) niceFraction = 2.5;
+    else if (fraction <= 3.0) niceFraction = 3.0;
+    else if (fraction <= 4.0) niceFraction = 4.0;
+    else if (fraction <= 5.0) niceFraction = 5.0;
+    else if (fraction <= 6.0) niceFraction = 6.0;
+    else if (fraction <= 8.0) niceFraction = 8.0;
+    const niceMax = Math.max(10, niceFraction * Math.pow(10, exponent));
+
+    y1 = niceMax;
+    y0 = -0.25 * niceMax;
+    yt = [
+      -0.25 * niceMax,
+      0,
+      0.25 * niceMax,
+      0.5 * niceMax,
+      0.75 * niceMax,
+      niceMax,
+    ];
+  }
 
   const X = (t: number): number => {
     const denom = x1 - x0;
@@ -104,7 +124,7 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
     return isNaN(val) ? m.t + ph : val;
   };
 
-  const fs = small ? 8 : 8.5;
+  const fs = small ? 7.8 : 8.5;
   // Valid points from getFixedTrace (full Gaussian curve for peaks, flat baseline with micro-noise for blanks)
   const validPts = pts.filter((pt) => Array.isArray(pt) && !isNaN(pt[0]) && !isNaN(pt[1]));
   const safePts = validPts;
@@ -127,7 +147,6 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
   const apexY = !isNaN(maxPt[1]) ? maxPt[1] : 0;
   const rawApexY = Y(apexY);
   const safeApexY = isNaN(rawApexY) ? m.t + ph : rawApexY;
-  const labelY = Math.max(m.t + 45, safeApexY - 5);
 
   // Check for secondary degradation peak from degradantInfo or sample name
   const deg = injection.degradantInfo;
@@ -142,15 +161,20 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
   const degHeight = deg ? deg.degradantHeight : (isDegradation ? apexY * 0.25 : null);
   const degRrtStr = deg ? deg.degradantRrt.toFixed(3) : "0.650";
 
-  // Short compound name in uppercase matching image.png (e.g. "ROSUVA" or "CETIRIZINE")
+  // Compound name in uppercase truncated to max 7 characters matching image.png (e.g. "TIBOLON", "ROSUVAS", "CETIRIZ")
   const compoundShort = React.useMemo(() => {
+    if (injection.compoundName) {
+      const c = injection.compoundName.toUpperCase().trim();
+      return c.length > 7 ? c.substring(0, 7) : c;
+    }
     if (!compound) return "COMPOUND";
     const cleaned = compound
       .replace(/\s*(oral\s+solution|tablets?|capsules?|injection|suspension|syrup|cream|ointment|gel|bp|usp|ep|ip|pm).*$/i, "")
       .trim();
     const words = cleaned.split(/\s+/);
-    return (words[0] || cleaned).toUpperCase();
-  }, [compound]);
+    const w = (words[0] || cleaned).toUpperCase();
+    return w.length > 7 ? w.substring(0, 7) : w;
+  }, [compound, injection.compoundName]);
 
   return (
     <svg
@@ -158,12 +182,12 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
       className="w-full h-auto bg-white block select-none"
       width={width}
       height={height}
-      style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
+      style={{ fontFamily: "'Arial', 'Helvetica', sans-serif" }}
     >
       {/* Pure White Background */}
       <rect width={width} height={height} fill="#ffffff" />
 
-      {/* Plot Axes: Enclosed box matching image.png, or open L-shaped axes */}
+      {/* Plot Axes: Enclosed box matching image.png */}
       {boxBorder ? (
         <rect
           x={m.l}
@@ -212,7 +236,7 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
         </text>
       )}
 
-      {/* Y Ticks */}
+      {/* Y Ticks with Outward Left Ticks and Inward Right Ticks matching image.png */}
       {yt.map((v, idx) => {
         const yy = Y(v);
         let tickLabel = "";
@@ -226,7 +250,7 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
 
         return (
           <g key={`y-tick-${idx}-${v}`}>
-            {/* Left Y Tick */}
+            {/* Left Y Tick (pointing outward to the left towards numbers, matching image.png) */}
             <line
               x1={m.l - 4}
               y1={yy}
@@ -235,12 +259,12 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
               stroke="#000000"
               strokeWidth="0.6"
             />
-            {/* Right Y Tick when boxBorder is true (matching image.png) */}
+            {/* Right Y Tick when boxBorder is true (pointing inward to the left into the chart, matching image.png) */}
             {boxBorder && (
               <line
-                x1={m.l + pw}
+                x1={m.l + pw - 4}
                 y1={yy}
-                x2={m.l + pw + 4}
+                x2={m.l + pw}
                 y2={yy}
                 stroke="#000000"
                 strokeWidth="0.6"
@@ -259,27 +283,27 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
         );
       })}
 
-      {/* X Ticks */}
+      {/* X Ticks with Inward Tick Marks matching image.png */}
       {xt.map((v, idx) => {
         const xx = X(v);
         return (
           <g key={`x-tick-${idx}-${v}`}>
-            {/* Bottom X Tick */}
+            {/* Bottom X Tick (inward pointing UP into the chart, exactly matching image.png) */}
             <line
               x1={xx}
               y1={m.t + ph}
               x2={xx}
-              y2={m.t + ph + 4}
+              y2={m.t + ph - 3.5}
               stroke="#000000"
               strokeWidth="0.6"
             />
-            {/* Top X Tick when boxBorder is true (matching image.png) */}
+            {/* Top X Tick when boxBorder is true (inward pointing DOWN into the chart, exactly matching image.png) */}
             {boxBorder && (
               <line
                 x1={xx}
-                y1={m.t - 4}
+                y1={m.t}
                 x2={xx}
-                y2={m.t}
+                y2={m.t + 3.5}
                 stroke="#000000"
                 strokeWidth="0.6"
               />
@@ -331,18 +355,27 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
             x2={degPx}
             y2={Y(0.0)}
             stroke="#000000"
-            strokeWidth="0.4"
-            strokeDasharray="1.5 1.5"
+            strokeWidth="0.5"
+            strokeDasharray="1.2 1.8"
+          />
+          <line
+            x1={degPx}
+            y1={m.t}
+            x2={degPx}
+            y2={Y(degHeight)}
+            stroke="#000000"
+            strokeWidth="0.5"
           />
           <text
-            x={degPx - 2}
-            y={Math.max(m.t + 45, Y(degHeight) - 5)}
+            x={degPx - 2.5}
+            y={Y(degHeight) - 3}
             fontSize={small ? 6.5 : 7}
+            fontWeight="600"
             fill="#000000"
-            fontFamily="sans-serif"
-            transform={`rotate(-90 ${degPx - 2} ${Math.max(m.t + 45, Y(degHeight) - 5)})`}
+            fontFamily="'Arial', 'Helvetica', sans-serif"
+            transform={`rotate(-90 ${degPx - 2.5} ${Y(degHeight) - 3})`}
           >
-            {fmt(degRt, 3)} / Degradant (RRT {degRrtStr})
+            {fmt(degRt, 3)} / DEGRAD
           </text>
         </g>
       )}
@@ -350,33 +383,34 @@ export const ChromatogramSvg: React.FC<ChromatogramSvgProps> = ({
       {/* Peak Apex Marker & Vertical Tag matching image.png */}
       {hasPeak && px > m.l && px < m.l + pw && (
         <g>
-          {/* Main Peak Dashed drop line from apex down to baseline */}
+          {/* Main Peak Dotted drop line from apex down to baseline */}
           <line
             x1={px}
-            y1={Y(apexY)}
+            y1={safeApexY}
             x2={px}
             y2={Y(0.0)}
             stroke="#000000"
-            strokeWidth="0.45"
-            strokeDasharray="1.5 1.5"
+            strokeWidth="0.55"
+            strokeDasharray="1.2 1.8"
           />
-          {/* Line from apex UP to top border, matching image.png */}
+          {/* Solid line from apex UP to top border, matching image.png */}
           <line
             x1={px}
             y1={m.t}
             x2={px}
-            y2={Y(apexY)}
+            y2={safeApexY}
             stroke="#000000"
-            strokeWidth="0.45"
+            strokeWidth="0.55"
           />
-          {/* Rotated Vertical Text Label: e.g. "8.108 / ROSUVA" */}
+          {/* Rotated Vertical Text Label: e.g. "6.500 / TIBOLON" matching image.png */}
           <text
             x={px - 2.5}
-            y={labelY}
+            y={safeApexY - 3}
             fontSize={fs}
+            fontWeight="600"
             fill="#000000"
-            fontFamily="sans-serif"
-            transform={`rotate(-90 ${px - 2.5} ${labelY})`}
+            fontFamily="'Arial', 'Helvetica', sans-serif"
+            transform={`rotate(-90 ${px - 2.5} ${safeApexY - 3})`}
           >
             {fmt(safeRt, 3)} / {compoundShort}
           </text>

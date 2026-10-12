@@ -163,7 +163,7 @@ export const SingleLabSolutionsPage: React.FC<SingleLabSolutionsPageProps> = ({
               detector={detectorName}
               width={680}
               height={180}
-              boxBorder={false}
+              boxBorder={true}
             />
           </div>
         </div>
